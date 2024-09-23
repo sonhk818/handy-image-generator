@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>SW24 hy5 p5hydra_HandyImageGenerator</title>
+	<meta charset="utf-8">
+	<!-- Compiled w/ P5LIVE, http://github.com/ffd8/p5live -->
+	<style type="text/css">
+		body{
+			margin:0;
+			overflow:hidden;
+		}
+		canvas{
+			position:fixed;
+			top:0;
+			left:0;
+			z-index:-1;
+			width:100vw;
+			height:100vh;
+			margin:0;
+		}
+	</style>
+	<script type="text/javascript">
+		// eco-mode = only render if window focused
+		window.onblur = function () {
+			noLoop();
+		};
+		window.onfocus = function () {
+			loop();
+		};
+	</script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/processing/p5.js-sound/lib/p5.sound.min.js"></script>
+<script type="text/javascript" src="https://unpkg.com/ml5@1/dist/ml5.js"></script>
+<script type="text/javascript" src="https://unpkg.com/hydra-synth"></script>
+<script type="text/javascript" src="includes/libs/hydra-synth.js"></script>
+<script type="text/javascript" src="includes/libs/hy5.js"></script>
+</head>
+<body style="background: rgb(0, 0, 0);">
+	<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/ffd8/hy5@main/hy5.js"></script>
+	
+<script type="text/javascript">
+//SW24 hy5 p5hydra_HandyImageGenerator
+
+/* CUSTOM FUNCTIONS FOR P5LIVE */
+// keep fullscreen if window resized
+function windowResized() {
+	resizeCanvas(windowWidth, windowHeight);
+}
+
+// custom ease function
+function ease(iVal, oVal, eVal){
+	return oVal += (iVal - oVal) * eVal;
+}
+
+// processing compatibility
+function println(msg){
+	print(msg);
+}
+
+
+var credits = { 
+	names : [ 
+		'Hongkyung.Son' // link to website if you have it <a href="URL" target="_blank">first.lastname</a> 
+	] 
+	,class : 'IDCE SW24' 
+	,description : `Lets remapping the images by hands` 
+} 
+
+
+
+let libs = ['https://unpkg.com/ml5@1/dist/ml5.js', 'https://unpkg.com/hydra-synth', 'includes/libs/hydra-synth.js', 'https://cdn.jsdelivr.net/gh/ffd8/hy5@main/hy5.js', 'includes/libs/hy5.js']
+
+// sandbox
+H.pd(1)
+
+s0.initP5()
+
+s1.initCam()
+
+s2.initImage('data/image/wave2.jpg')
+// s2.initImage(img)
+
+s3.initVideo('https://i.giphy.com/4T1NFafropdQOrBYw6.mp4')
+
+
+src(s0)
+	.modulate(noize(() => sliderNoize.value()), .2) // 4 is value fetch amount of noise of shape of hand
+	.modulatePixelate(voronoi(() => sliderPixel.value()), 20, -50)
+	.modulateScale(noize(() => sliderScale.value()), () => sliderForce.value()) // noiseScale .1 >1000       .2 > amount of modulate .01 > 1
+	// .modulatePixelate(src(o0), 200, -50)
+	// .modulatePixelate(src(s0), 200, -50)
+	.out(o0)
+
+src(s1)
+	.modulate(src(o0))
+	// .modulatePixelate(voronoi(200), 200, -50)
+	// .modulatePixelate(src(o0), 200, -50)
+	// .modulatePixelate(src(s0), 200, -50)
+	// .luma()
+	.out(o1)
+
+src(s2)
+	.modulate(src(o0))
+	// .modulatePixelate(voronoi(200), 200, -50)
+	// .modulatePixelate(src(o0), 200, -50)
+	// .modulatePixelate(src(s0), 200, -50)
+	// .luma()
+	.out(o2)
+
+src(s3)
+	.modulate(src(o0))
+	// .modulatePixelate(voronoi(200), 200, -50)
+	// .modulatePixelate(src(o0), 200, -50)
+	// .modulatePixelate(src(s0), 200, -50)
+	// .luma()
+	.out(o3)
+
+P5.z(-1)
+P5.toggle(0) // on off P5
+H.toggle(1) // on off HYDRA
+render(o1)
+// sandbox
+
+// let for handpose
+let handPose
+let hands = [];
+
+function preload() {
+	handPose = ml5.handPose()
+}
+
+let video
+let videoScale
+
+//let for GUI_Selection
+let mySelect, drawMode; // global var for select + drawing mode 
+let opts = ['webcam', 'pic', 'gif', 'hand'] // array of options 
+// let renderV = ['o0', 'o1', 'o2', 'o3']
+
+//let for GUI_INPUT
+let input, img; // store global variables 
+
+let layer;
+
+var recording = false
+
+function setup() {
+	// createCanvas(windowWidth*2, windowHeight*2)
+	createCanvas(windowWidth, windowHeight)
+
+	video = createCapture(VIDEO)
+	video.size(640, 480)
+	video.hide()
+	// Start detecting hands from the webcam video
+	handPose.detectStart(video, gotHands)
+
+	videoScale = width / video.width
+
+
+
+
+	rectMode(CENTER);
+	stroke(255);
+	noFill();
+
+	imageMode(CENTER)
+	layer = createGraphics(width, height) // create layer as big as canvas 
+
+
+	//GUI HOLDER 
+	guiHolder = createDiv('').class('guiHolder')
+
+	createDiv('HANDY IMAGE GENERATOR').parent(guiHolder).class('guiBar').draggable(guiHolder)
+
+	createDiv('resolution').parent(guiHolder).class('guiLabel')
+	sliderResolution = createSlider(.01, 1, 1, .01).parent(guiHolder).class('guiSlider').input(function() {
+		H.pd(sliderResolution.value())
+	})
+
+	createDiv('noise').parent(guiHolder).class('guiLabel')
+	sliderNoize = createSlider(1, 100, 4, .01).parent(guiHolder).class('guiSlider')
+
+	createDiv('pixelate').parent(guiHolder).class('guiLabel')
+	sliderPixel = createSlider(.01, 200, 10, .01).parent(guiHolder).class('guiSlider')
+
+	createDiv('N scale').parent(guiHolder).class('guiLabel')
+	sliderScale = createSlider(.1, 1000, 40, .1).parent(guiHolder).class('guiSlider')
+
+	createDiv('Size').parent(guiHolder).class('guiLabel')
+	sliderSize = createSlider(10, 500, 200, 10).parent(guiHolder).class('guiSlider')
+
+	createDiv('force').parent(guiHolder).class('guiLabel')
+	sliderForce = createSlider(.01, 100, .2, .01).parent(guiHolder).class('guiSlider')
+
+	createDiv('amount').parent(guiHolder).class('guiLabel')
+	sliderAmount = createSlider(1, 100, 10, .1).parent(guiHolder).class('guiSlider')
+	//   .input(function(){
+	//   	background(0,sliderResolution.value())
+	// })
+
+	// createDiv('gooo wild').parent(guiHolder).class('guiLabel')
+	// goWild = createCheckbox('', false).parent(guiHolder)
+
+	//Break
+	createElement('br').parent(guiHolder) // break
+	createElement('br').parent(guiHolder) // break
+	createElement('br').parent(guiHolder) // break
+
+	//GUI_select
+	mySelect = createSelect().parent(guiHolder).class('guiButton') // create dropdown 
+	// mySelect.position(width / 2, 50); // set position 
+
+	// cycle array to add options 
+	for(let o of opts) {
+		mySelect.option(o)
+	}
+
+	// init with random option 
+	// drawMode = random(opts)
+	// mySelect.selected(drawMode);
+
+	// set drawMode var on change 
+	mySelect.changed(function() {
+		drawMode = this.value()
+		//GUI_Selection_do something based on selected 
+		if(drawMode == 'webcam') {
+			eval('render(o1)')
+		} else if(drawMode == 'pic') {
+			eval('render(o2)')
+		} else if(drawMode == 'gif') {
+			eval('render(o3)')
+		} else if(drawMode == 'hand') {
+			eval('render(o0)')
+		}
+	})
+
+	//Break
+	createElement('br').parent(guiHolder) // break
+	createElement('br').parent(guiHolder) // break   	
+
+
+	//GUI_INPUT
+	// create fileinput button and function when file selected 
+	input = createFileInput(fileHandle).parent(guiHolder).class('guiButton').style('display', 'none')
+	createButton('LOAD').parent(guiHolder).class('guiButton').mouseClicked(function() {
+		input.elt.click()
+	})
+
+	//Break
+	createElement('br').parent(guiHolder) // break
+	createElement('br').parent(guiHolder) // break   
+
+	createButton('EXPORT').parent(guiHolder).class('guiButton').mouseClicked(function() {
+		// save('amaaaazing.png') // export p5 as png
+		H.save() // export hydra as png
+		// saveGif('amaaaazing.gif', 1) // export gif: name, xSeconds
+	})
+
+	//Break
+	createElement('br').parent(guiHolder) // break
+	createElement('br').parent(guiHolder) // break   	
+
+//GUI RECORD
+	myGUI = createDiv('').parent(guiHolder).class('guiButton')
+	
+	recButton = createButton('🟢 RECORD').parent(myGUI).mouseClicked(function(){
+		if(!recording){
+			recButton.html('🛑 STOP')
+			vidRecorder.start()
+			recording = true
+		}else{
+			recButton.html('🟢 RECORD')
+			vidRecorder.stop()
+			recording = false
+		}
+	})
+
+
+
+	createElement('style', `
+        .guiHolder{
+            position:fixed;
+            right:15px;
+            top:15px;
+            width:150px;
+            height:530px;
+            background:black;
+            font-family:monospace;
+            padding:5px;
+            outline:none;
+        }
+        .guiBar{
+            background:black;
+            color:white;
+            text-align:center;
+            padding:5px;
+        }
+        .guiLabel{
+            color:#fff;
+            padding:5px;
+        }
+        .guiSlider{
+            width:95%;
+        }
+        .guiButton{
+            clear:both;
+        }
+    `)
+
+
+}
+
+function gotHands(results) {
+	// Save the output to the hands variable
+	hands = results
+}
+
+
+function draw() {
+	noStroke()
+	background(0, 100 - sliderAmount.value()) // 1-100 10 defalut
+
+   //if(goWild.checked()){
+   //     circle(random(width), random(height), random(50))
+   // }else{
+   //     background(sliderBackground.value(), 15)
+   // }
+
+
+	// circle(mouseX, mouseY, 300)
+
+	// image(video, 0, 0, width, height);
+	// background(0, 3)
+	// Draw all the tracked hand points
+	for(let i = 0; i < hands.length; i++) {
+		let hand = hands[i];
+
+		for(let j = 0; j < hand.keypoints.length; j++) {
+			let keypoint = hand.keypoints[j]; // 8 is index finger
+
+			fill(255);
+			noStroke();
+			circle(keypoint.x * videoScale, keypoint.y * videoScale, sliderSize.value());
+		}
+
+
+
+
+		//Draw for GUI_INPUT
+		if(img) {
+			layer.imageMode(CENTER)
+			layer.image(img, layer.width / 2, layer.height / 2)
+			// s2.initImage(img)
+		}
+	}
+
+
+}
+
+
+// GUI_INPUT_process selected file 
+function fileHandle(file) {
+	if(file.type === 'image') {
+		img = createImg(file.data, '');
+		img.hide();
+		s2.initP5(layer)
+		mySelect.selected('pic');
+		eval('render(o2)')
+	} else {
+		img = null;
+	}
+}
+</script>
+
+</body>
+</html>
